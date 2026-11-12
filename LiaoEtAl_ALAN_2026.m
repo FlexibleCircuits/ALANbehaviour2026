@@ -158,19 +158,24 @@ for iz = 1:nZT
         end
 
         % --- latency ---
-        mel_to_SCN = mel_del(plotrange) / ipnorm;
+         mel_to_SCN = mel_del(plotrange) / ipnorm;
         if species == 0
             clockgene_current = exp(13 * (1 - 0.22*clockg(plotrange)) .* (1 - clockg(plotrange)) ...
                                     .* (1 - exp(-max(5*mel_to_SCN - 1, 0))));
             base_latency = 0.3; expo = 0.243;
         else
-            clockgene_current = exp(-5.5 * clockg(plotrange) .* (1 - exp(-max(7.5*mel_to_SCN - 1, 0))) ...
-                                    + 8 * (clockg(plotrange) - SCN(plotrange)));
+            clockgene_current = exp(5.5 * clockg(plotrange) .* (1 - exp(-max(7.5*mel_to_SCN - 1, 0))) ...
+                                    - 8 * (clockg(plotrange) - SCN(plotrange)));
             base_latency = 0.75; expo = 0.275;
         end
         SCN_current = (SCN(plotrange) .* clockgene_current) ./ ...
                       (SCN(plotrange) .* clockgene_current + (1 - SCN(plotrange)));
-        latency = base_latency .* (SCN_current ./ (1 - SCN_current)).^expo;
+        if species == 0
+            latency = base_latency .* (SCN_current ./ (1 - SCN_current)).^expo;
+        else
+            latency = base_latency .* ((1 - SCN_current) ./ SCN_current).^expo ...
+                                   .* (SCN(plotrange) ./ (1 - SCN(plotrange))).^(2*expo);
+        end
 
         model_latency{iz,n} = latency;
 
