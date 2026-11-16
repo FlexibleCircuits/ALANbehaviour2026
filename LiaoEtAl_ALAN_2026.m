@@ -3,9 +3,9 @@ close all
 clc
 
 %% ===================== settings =====================
-stimulus2plot = 'looming';    % looming, sweeping, dimm, white loom, cricket, wntone2
-species       = 0;            % 0 = mouse, 1 = Rhabdomys
-datapath      = 'N:\Katja';
+stimulus2plot = 'looming';
+species       = 1;            % 0 = mouse, 1 = Rhabdomys
+datapath      = 'xxx'; % adjust to path with downloaded data
 
 ZTlist  = [2 10 14 22];
 NDlist  = [0 1 3];
@@ -80,9 +80,9 @@ for y = 1:size(Y,1)
     end
 end
 
-%% ===================== fixed circadian traces =====================
+%% ===================== fixed circadian rhythms =====================
 x      = -pi : 2*pi/(1440-1) : pi;
-SCN    = -sin(x);              SCN    = [SCN(1321:end) SCN SCN];      % starts at ZT22
+SCN    = -sin(x);              SCN    = [SCN(1321:end) SCN SCN];
 clockg = -sin(x + clockshift); clockg = [clockg(1321:end) clockg clockg];
 SCN    = (SCN + 1)/2;
 clockg = (clockg + 1)/2;
@@ -90,6 +90,7 @@ clockg = (clockg + 1)/2;
 %% ===================== model =====================
 nZT = numel(ZTlist); nND = numel(NDlist);
 model_latency = cell(nZT, nND);
+model_light   = cell(nZT, nND);
 cond_names    = cell(nZT, nND);
 
 figFull  = figure('Name','Model traces, whole duration');
@@ -119,7 +120,7 @@ for iz = 1:nZT
             contrast = (light(idc) - light(idc-1)) / light(idc-1);
             idc2 = find(light(idc:end) < 0.75, 1) + idc - 1;
             if isempty(idc2)
-                idc2 = 3000; 
+                idc2 = 3000;
             end
             melanopsin(idc:idc+6)  = contrast * mfilter;
             melanopsin(idc+7:idc2) = contrast * 0.3;
@@ -149,7 +150,7 @@ for iz = 1:nZT
                 if ipRGC(i) > ipRGC(i-1)
                     a = 0.7;
                 else
-                    a = 1/5; 
+                    a = 1/5;
                 end
             else
                 a = 1/25;
@@ -158,28 +159,30 @@ for iz = 1:nZT
         end
 
         % --- latency ---
-         mel_to_SCN = mel_del(plotrange) / ipnorm;
+        mel_to_SCN = mel_del(plotrange) / ipnorm;
         if species == 0
             clockgene_current = exp(13 * (1 - 0.22*clockg(plotrange)) .* (1 - clockg(plotrange)) ...
-                                    .* (1 - exp(-max(5*mel_to_SCN - 1, 0))));
+                .* (1 - exp(-max(5*mel_to_SCN - 1, 0))));
             base_latency = 0.3; expo = 0.243;
         else
             clockgene_current = exp(5.5 * clockg(plotrange) .* (1 - exp(-max(7.5*mel_to_SCN - 1, 0))) ...
-                                    - 8 * (clockg(plotrange) - SCN(plotrange)));
+                - 8 * (clockg(plotrange) - SCN(plotrange)));
             base_latency = 0.75; expo = 0.275;
         end
         SCN_current = (SCN(plotrange) .* clockgene_current) ./ ...
-                      (SCN(plotrange) .* clockgene_current + (1 - SCN(plotrange)));
+            (SCN(plotrange) .* clockgene_current + (1 - SCN(plotrange)));
+
         if species == 0
             latency = base_latency .* (SCN_current ./ (1 - SCN_current)).^expo;
         else
             latency = base_latency .* ((1 - SCN_current) ./ SCN_current).^expo ...
-                                   .* (SCN(plotrange) ./ (1 - SCN(plotrange))).^(2*expo);
+                .* (SCN(plotrange) ./ (1 - SCN(plotrange))).^(2*expo);
         end
 
         model_latency{iz,n} = latency;
+        model_light{iz,n}   = light(plotrange);
 
-         % --- trace plots for the 4 main conditions ---
+        % --- trace plots for the 4 main conditions ---
         k = find(strcmp(main4, cond_names{iz,n}));
         if ~isempty(k)
             st = starts_data(strcmp(cond_data, cond_names{iz,n}));
@@ -196,7 +199,7 @@ for iz = 1:nZT
             title(main4_labels{k})
             if k == 1, legend(leg, 'Location','best'), end
 
-            % from 2 h before experiment start (ZT-2) to the end of plotrange, x-axis in ZT
+
             figure(figRange), subplot(2,2,k)
             sel = 121:numel(plotrange);
             ztx = ZT + (plotrange(sel) - start)/60;
@@ -220,16 +223,16 @@ end
 %% ===================== data vs model: split violins (4 main conditions) =====================
 figure('Name','Data vs model'), hold on
 halfwidth = 0.4;
-sides = [-1 1];                              % left = data, right = model
+sides = [-1 1];
 cols  = {[0 0.45 0.74], [0.5 0.5 0.5]};
 for k = 1:4
     [iz, n] = find(strcmp(cond_names, main4{k}));
     idx = find(strcmp(cond_data, cond_names{iz,n}) & ~isnan(L));
-if isempty(idx)
-    vals = {[], model_latency{iz,n}(post)'};
-else
-    vals = {L(idx), model_latency{iz,n}(starts_data(idx))'};
-end
+    if isempty(idx)
+        vals = {[], model_latency{iz,n}(post)'};
+    else
+        vals = {L(idx), model_latency{iz,n}(starts_data(idx))'};
+    end
     % idx  = find(strcmp(cond_data, main4{k}) & ~isnan(L));
     % vals = {L(idx), model_latency{iz,n}(starts_data(idx))'};   % model sampled at each trial's time
     for s = 1:2
@@ -242,7 +245,7 @@ end
             f  = ksdensity(v, yi);
             f  = f/max(f) * halfwidth;
             fill([k + sides(s)*f, k*ones(1,100)], [yi, fliplr(yi)], cols{s}, ...
-                 'FaceAlpha', 0.25, 'EdgeColor', cols{s})
+                'FaceAlpha', 0.25, 'EdgeColor', cols{s})
             q = quantile(v, [0.25 0.5 0.75]);
             wq = interp1(yi, f, q);
             plot([k k + sides(s)*wq(2)], [q(2) q(2)], '-',  'Color', cols{s}, 'LineWidth', 2)
@@ -272,13 +275,13 @@ end
 
 figure('Name','Model latency, all conditions'), hold on
 ZTcol = [0.55 0.8 1; 1 0.6 0.1; 0 0.3 0.8; 0.5 0.2 0.6];   % ZT2 light blue, ZT10 orange, ZT14 blue, ZT22 purple
-w  = 0.18;                                   % bar width
+w  = 0.18;
 hb = gobjects(1, nZT);
 for n = 1:nND
     for iz = 1:nZT
         xc = n + (iz - (nZT+1)/2) * (w + 0.03);
         hb(iz) = fill(xc + [-w -w w w]/2, [q25(iz,n) q75(iz,n) q75(iz,n) q25(iz,n)], ZTcol(iz,:), ...
-                      'FaceAlpha', 0.35, 'EdgeColor', ZTcol(iz,:));
+            'FaceAlpha', 0.35, 'EdgeColor', ZTcol(iz,:));
         plot(xc + [-w w]/2, [med(iz,n) med(iz,n)], '-', 'Color', ZTcol(iz,:), 'LineWidth', 2)
     end
 end
@@ -291,21 +294,20 @@ box off
 %% ===================== data vs model: bar graph, all conditions =====================
 figure('Name','Data vs model latency, all conditions','position',[402.6000 236.2000 413.6000 420])
 hold on
-wb = 0.08;                                   % width of each bar
+wb = 0.08;
 for n = 1:nND
     for iz = 1:nZT
-        xc = n + (iz - (nZT+1)/2) * 0.22;    % centre of this condition
-        % data (left bar), only if this condition exists in the data
+        xc = n + (iz - (nZT+1)/2) * 0.22;
         v = L(strcmp(cond_data, cond_names{iz,n}) & ~isnan(L));
         if ~isempty(v)
             q = quantile(v, [0.25 0.5 0.75]);
             fill(xc - wb/2 - 0.005 + [-wb -wb wb wb]/2, [q(1) q(3) q(3) q(1)], ZTcol(iz,:), ...
-                 'FaceAlpha', 0.6, 'EdgeColor', ZTcol(iz,:))
+                'FaceAlpha', 0.6, 'EdgeColor', ZTcol(iz,:))
             plot(xc - wb/2 - 0.005 + [-wb wb]/2, [q(2) q(2)], '-k', 'LineWidth', 2)
         end
         % model (right bar)
         fill(xc + wb/2 + 0.005 + [-wb -wb wb wb]/2, [q25(iz,n) q75(iz,n) q75(iz,n) q25(iz,n)], ZTcol(iz,:), ...
-             'FaceAlpha', 0.15, 'EdgeColor', ZTcol(iz,:), 'LineStyle', '--')
+            'FaceAlpha', 0.15, 'EdgeColor', ZTcol(iz,:), 'LineStyle', '--')
         plot(xc + wb/2 + 0.005 + [-wb wb]/2, [med(iz,n) med(iz,n)], '-', 'Color', ZTcol(iz,:), 'LineWidth', 2)
     end
 end
@@ -338,8 +340,8 @@ for ax = [axBot axTop]
         n = find(NDlist == NDorder(g));
         for iz = 1:nZT
             xc   = 1 + (g-1)*gap + (iz - (nZT+1)/2) * 0.22;
-            vals = {L(strcmp(cond_data, cond_names{iz,n}) & ~isnan(L)), ...   % left: data
-                    model_latency{iz,n}(post)'};                              % right: model
+            vals = {L(strcmp(cond_data, cond_names{iz,n}) & ~isnan(L)), ...
+                model_latency{iz,n}(post)'};
             for s = 1:2
                 v = vals{s}(:);
                 if isempty(v), continue, end
@@ -351,7 +353,7 @@ for ax = [axBot axTop]
                     f  = ksdensity(v, yi);
                     f  = f/max(f) * hw;
                     fill(ax, [xc + sides(s)*f, xc*ones(1,100)], [yi, fliplr(yi)], fc, ...
-                         'FaceAlpha', fa, 'EdgeColor', fc)
+                        'FaceAlpha', fa, 'EdgeColor', fc)
                     q  = quantile(v, [0.25 0.5 0.75]);
                     wq = interp1(yi, f, q);
                     plot(ax, [xc xc + sides(s)*wq(2)], [q(2) q(2)], '-',  'Color', lc, 'LineWidth', 2)
@@ -371,7 +373,7 @@ set(axBot, 'YLim', [0 ybreak], 'XLim', xlims, 'XTick', 1 + (0:numel(NDorder)-1)*
     'XTickLabel', strcat('ND', string(NDorder)), 'TickDir', 'out', 'Box', 'off')
 set(axTop, 'YLim', [ybreak ytop], 'XLim', xlims, 'XTick', [], 'XColor', 'none', 'TickDir', 'out', 'Box', 'off')
 ylabel(axBot, 'latency')
-annotation(fig, 'line', [0.09 0.11], [0.735 0.755])   % axis-break marks
+annotation(fig, 'line', [0.09 0.11], [0.735 0.755])
 annotation(fig, 'line', [0.09 0.11], [0.775 0.795])
 
 hz = gobjects(1, nZT);
@@ -384,8 +386,7 @@ for g = 1:numel(NDorder)
     n = find(NDlist == NDorder(g));
     for iz = 1:nZT
         xc   = 1 + (g-1)*gap + (iz - (nZT+1)/2) * 0.22;
-        vals = {L(strcmp(cond_data, cond_names{iz,n}) & ~isnan(L)), ...   % left: data
-                model_latency{iz,n}(post)'};                              % right: model
+        vals = {L(strcmp(cond_data, cond_names{iz,n}) & ~isnan(L)), model_latency{iz,n}(post)'};
         for s = 1:2
             v = vals{s}(:);
             if numel(v) < 2 || max(v) == min(v), continue, end
@@ -416,8 +417,7 @@ hd = fill(nan, nan, datacol, 'FaceAlpha', 0.5, 'EdgeColor', datacol);
 legend([hd hz], [{'data (25-75%)'}, cellstr(strcat('model ZT', string(ZTlist)))], 'Location', 'northwest')
 
 %% ===================== measured data: latency and pre-escape speed per condition =====================
-% same 4 conditions and order as the data vs model split violins
-plot_conds  = main4;          % {'ND3LD14','ND0LD14','ND0LD02','ND3LD02'}
+plot_conds  = main4;
 plot_labels = main4_labels;   % {'ZT14 dim','ZT14 bright','ZT2 bright','ZT2 dim'}
 nC = numel(plot_conds);
 
@@ -449,9 +449,39 @@ for m = 1:2
     print_stats(meas_name{m}, V, cond_data, sex_data, plot_conds, plot_labels)
 end
 
+%% ===================== GLM: measured latency ~ 1 + ambient light + sex =====================
+% only ZT14 trials, dim and bright (ND3LD14, ND0LD14)
+glm_conds = {'ND3LD14','ND0LD14'};
+lgt = nan(size(Y,1),1);
+for iz = 1:nZT
+    for n = 1:nND
+        idc = find(strcmp(cond_data, cond_names{iz,n}));
+        lgt(idc) = model_light{iz,n}(starts_data(idc));
+    end
+end
+
+totake = find(~isnan(lgt) & ismember(cond_data, glm_conds));
+tbl = table(L(totake), zscore(lgt(totake)), sex_data(totake), ...
+    'VariableNames', {'Latency','light','sex'});
+tbl = tbl(~isnan(tbl.Latency),:);
+
+lmeL = fitlme(tbl, 'Latency ~ 1 + light + sex');
+disp(lmeL)
+
+figure('position',[387.4000 362.6000 250 289.6000],'color','w'), hold on
+lbls = {'baseline','ambient light','sex'};
+for s = 1:size(lmeL.Coefficients,1)
+    plot(s, lmeL.Coefficients{s,2}, 'ob')
+    plot([s s], [lmeL.Coefficients{s,7} lmeL.Coefficients{s,8}], '-k')
+end
+plot([0.5 s+0.5], [0 0], '--k')
+set(gca, 'xtick', 1:s, 'xticklabel', lbls)
+ylabel('escape latency (s)')
+title('latency - mixed effects model')
+axis([0.5 s+0.5 -inf inf])
+
 %% ===================== local functions =====================
 function print_stats(name, V, cond_data, sex_data, conds, labels)
-% medians, 25-75th percentiles and pairwise rank-sum tests for all, female and male mice
 grp_name = {'all', 'female', 'male'};
 grp_mask = {true(size(V)), sex_data == 1, sex_data == 2};
 
